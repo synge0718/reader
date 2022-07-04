@@ -208,21 +208,21 @@
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(50)"
+          @click="cacheChapterContent(50)"
         >
           后面50章
         </div>
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(100)"
+          @click="cacheChapterContent(100)"
         >
           后面100章
         </div>
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(true)"
+          @click="cacheChapterContent(true)"
         >
           后面全部
         </div>
@@ -421,11 +421,8 @@ import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
 import { setCache, getCache } from "../plugins/cache";
-import {
-  cacheFirstRequest,
-  LimitResquest,
-  networkFirstRequest
-} from "../plugins/helper";
+import { simplized, traditionalized } from "../plugins/chinese";
+import { LimitResquest, networkFirstRequest } from "../plugins/helper";
 import { defaultReplaceRule } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
 
@@ -603,6 +600,11 @@ export default {
       } else {
         this.content = this.filterContent(this.content);
       }
+    },
+    chineseFont() {
+      this.title = this.title;
+      this.content = this.content;
+      this.computeShowChapterList();
     }
   },
   data() {
@@ -920,7 +922,10 @@ export default {
     },
     isCarToon() {
       return (
-        !this.error && !this.isEpub && (this.content || "").indexOf("<img") >= 0
+        !this.error &&
+        !this.isEpub &&
+        !this.isCbz &&
+        (this.content || "").indexOf("<img") >= 0
       );
     },
     isAudio() {
@@ -930,6 +935,12 @@ export default {
       return (
         !this.error &&
         this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".epub")
+      );
+    },
+    isCbz() {
+      return (
+        !this.error &&
+        this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".cbz")
       );
     },
     scrollOffset() {
@@ -942,6 +953,12 @@ export default {
           this.$store.getters.config.paragraphSpace *
           2
       );
+    },
+    formatedTitle() {
+      return this.formatChinese(this.title);
+    },
+    chineseFont() {
+      return this.config.chineseFont;
     }
   },
   methods: {
@@ -1048,10 +1065,7 @@ export default {
         params.bookSourceUrl = this.$store.state.readingBook.origin;
       }
       return networkFirstRequest(
-        () =>
-          Axios.get(this.api + "/getChapterList", {
-            params
-          }),
+        () => Axios.post(this.api + "/getChapterList", params),
         this.$store.state.readingBook.bookName +
           "_" +
           this.$store.state.readingBook.author +
@@ -1063,30 +1077,12 @@ export default {
     refreshCatalog() {
       return this.loadCatalog(true);
     },
-    async getBookContent(chapterIndex, options, refresh, cache) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(
-            this.api +
-              "/getBookContent?url=" +
-              encodeURIComponent(this.$store.state.readingBook.bookUrl) +
-              "&index=" +
-              chapterIndex +
-              (refresh ? "&refresh=1" : "") +
-              (cache ? "&cache=1" : ""),
-            {
-              timeout: 30000,
-              ...options
-            }
-          ),
-        this.$store.state.readingBook.bookName +
-          "_" +
-          this.$store.state.readingBook.author +
-          "@" +
-          this.$store.state.readingBook.bookUrl +
-          "@chapterContent-" +
-          chapterIndex,
-        refresh
+    getBookContent(chapterIndex, options, refresh, cache) {
+      return this.$root.$children[0].getBookContent(
+        chapterIndex,
+        options,
+        refresh,
+        cache
       );
     },
     refreshContent() {
@@ -1176,6 +1172,9 @@ export default {
             this.$emit("showContent");
             this.loading.close();
           }
+          if (this.isScrollRead) {
+            this.computeShowChapterList();
+          }
         },
         error => {
           if (
@@ -1200,6 +1199,9 @@ export default {
           this.$message.error(
             "获取章节内容失败 " + (error && error.toString())
           );
+          if (this.isScrollRead) {
+            this.computeShowChapterList();
+          }
           throw error;
         }
       );
@@ -1244,6 +1246,7 @@ export default {
         //
       }
       content.replace(/\\n+/g, "\n");
+      content = this.formatChinese(content);
       return content;
     },
     loadShowChapter(index, refresh) {
@@ -1323,6 +1326,9 @@ export default {
         !chapter.error || // 当前内容正确
         this.chapterContentCache.chapters[chapter.index].error // 缓存内容错误
       ) {
+        // 查询是否卷名
+        chapter.isVolume = !!(this.readingBook.catalog[chapter.index] || {})
+          .isVolume;
         this.chapterContentCache.chapters[chapter.index] = chapter;
       }
     },
@@ -2511,7 +2517,7 @@ export default {
     showCacheContent() {
       this.showCacheContentZone = !this.showCacheContentZone;
     },
-    cahceChapterContent(cacheCount) {
+    cacheChapterContent(cacheCount) {
       //
       let cacheChapterList = [];
       if (cacheCount === true) {
@@ -2582,6 +2588,10 @@ export default {
         }, 300);
         return;
       }
+      if (this.config.autoReadingMethod === "像素滚动") {
+        this.autoReadByPixel();
+        return;
+      }
       const current = this.getCurrentParagraph();
       const next = this.getNextParagraph();
       if (next) {
@@ -2621,6 +2631,44 @@ export default {
         });
       }
     },
+    autoReadByPixel() {
+      if (!this.autoReading) {
+        return;
+      }
+      if (this.showToolBar) {
+        this.autoReadingTimer = setTimeout(() => {
+          this.autoRead();
+        }, 300);
+        return;
+      }
+      if (this.config.autoReadingMethod !== "像素滚动") {
+        this.autoRead();
+        return;
+      }
+      const scrollTop =
+        document.documentElement.scrollTop || document.body.scrollTop;
+      if (
+        scrollTop + this.windowSize.height <
+        document.documentElement.scrollHeight
+      ) {
+        // console.log(delayTime, next);
+        this.autoReadingTimer = setTimeout(() => {
+          // 滚动
+          this.scrollContent(this.config.autoReadingPixel, 0);
+          this.autoReadByPixel();
+        }, this.config.autoReadingLineTime);
+      } else {
+        // 下一章
+        this.$once("showContent", () => {
+          setTimeout(() => {
+            this.autoReadByPixel();
+          }, 100);
+        });
+        this.toNextChapter(() => {
+          this.autoReading = false;
+        });
+      }
+    },
     stopAutoReading() {
       if (this.autoReadingTimer) {
         clearInterval(this.autoReadingTimer);
@@ -2643,6 +2691,16 @@ export default {
       );
       book = Object.assign(book, shelfBook || {});
       eventBus.$emit("showBookInfoDialog", book);
+    },
+    formatChinese(text) {
+      if (this.isEpub || this.isAudio || this.isCbz || this.isCarToon) {
+        return text;
+      }
+      if (this.config.chineseFont === "简体") {
+        return simplized(text);
+      } else {
+        return traditionalized(text);
+      }
     }
   }
 };

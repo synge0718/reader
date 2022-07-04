@@ -135,17 +135,17 @@ class YueduApi : RestVerticle() {
         val replaceRuleController = ReplaceRuleController(coroutineContext)
 
         /** 书源模块 */
-        router.post("/reader3/saveSource").coroutineHandler { bookSourceController.saveSource(it) }
-        router.post("/reader3/saveSources").coroutineHandler { bookSourceController.saveSources(it) }
+        router.post("/reader3/saveBookSource").coroutineHandler { bookSourceController.saveBookSource(it) }
+        router.post("/reader3/saveBookSources").coroutineHandler { bookSourceController.saveBookSources(it) }
 
-        router.get("/reader3/getSource").coroutineHandler { bookSourceController.getSource(it) }
-        router.post("/reader3/getSource").coroutineHandler { bookSourceController.getSource(it) }
-        router.get("/reader3/getSources").coroutineHandler { bookSourceController.getSources(it) }
-        router.post("/reader3/getSources").coroutineHandler { bookSourceController.getSources(it) }
+        router.get("/reader3/getBookSource").coroutineHandler { bookSourceController.getBookSource(it) }
+        router.post("/reader3/getBookSource").coroutineHandler { bookSourceController.getBookSource(it) }
+        router.get("/reader3/getBookSources").coroutineHandler { bookSourceController.getBookSources(it) }
+        router.post("/reader3/getBookSources").coroutineHandler { bookSourceController.getBookSources(it) }
 
-        router.post("/reader3/deleteSource").coroutineHandler { bookSourceController.deleteSource(it) }
-        router.post("/reader3/deleteSources").coroutineHandler { bookSourceController.deleteSources(it) }
-        router.post("/reader3/deleteAllSources").coroutineHandler { bookSourceController.deleteAllSources(it) }
+        router.post("/reader3/deleteAllBookSources").coroutineHandler { bookSourceController.deleteAllBookSources(it) }
+        router.post("/reader3/deleteBookSource").coroutineHandler { bookSourceController.deleteBookSource(it) }
+        router.post("/reader3/deleteBookSources").coroutineHandler { bookSourceController.deleteBookSources(it) }
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }
@@ -153,6 +153,10 @@ class YueduApi : RestVerticle() {
         // 读取远程书源文件
         router.post("/reader3/readRemoteSourceFile").coroutineHandlerWithoutRes { bookSourceController.readRemoteSourceFile(it) }
 
+        // 设置默认书源
+        router.post("/reader3/setAsDefaultBookSources").coroutineHandler { bookSourceController.setAsDefaultBookSources(it) }
+        router.post("/reader3/deleteUserBookSource").coroutineHandler { bookSourceController.deleteUserBookSource(it) }
+        router.post("/reader3/deleteBookSourcesFile").coroutineHandler { bookSourceController.deleteBookSourcesFile(it) }
 
         /** 书籍模块 */
         // 书架
@@ -160,6 +164,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/getShelfBook").coroutineHandler { bookController.getShelfBook(it) }
         router.post("/reader3/saveBook").coroutineHandler { bookController.saveBook(it) }
         router.post("/reader3/deleteBook").coroutineHandler { bookController.deleteBook(it) }
+        router.post("/reader3/deleteBooks").coroutineHandler { bookController.deleteBooks(it) }
 
         // 失效书源
         router.post("/reader3/getInvalidBookSources").coroutineHandler { bookController.getInvalidBookSources(it) }
@@ -195,15 +200,19 @@ class YueduApi : RestVerticle() {
 
         // 搜索其它来源
         router.get("/reader3/searchBookSource").coroutineHandler { bookController.searchBookSource(it) }
-        router.get("/reader3/getBookSource").coroutineHandler { bookController.getBookSource(it) }
+        router.post("/reader3/searchBookSource").coroutineHandler { bookController.searchBookSource(it) }
+        router.get("/reader3/getAvailableBookSource").coroutineHandler { bookController.getAvailableBookSource(it) }
+        router.post("/reader3/getAvailableBookSource").coroutineHandler { bookController.getAvailableBookSource(it) }
         router.get("/reader3/searchBookSourceSSE").coroutineHandlerWithoutRes { bookController.searchBookSourceSSE(it) }
 
         // 换源
-        router.get("/reader3/saveBookSource").coroutineHandler { bookController.saveBookSource(it) }
-        router.post("/reader3/saveBookSource").coroutineHandler { bookController.saveBookSource(it) }
+        router.get("/reader3/setBookSource").coroutineHandler { bookController.setBookSource(it) }
+        router.post("/reader3/setBookSource").coroutineHandler { bookController.setBookSource(it) }
 
         // 修改分组
         router.post("/reader3/saveBookGroupId").coroutineHandler { bookController.saveBookGroupId(it) }
+        router.post("/reader3/addBookGroupMulti").coroutineHandler { bookController.addBookGroupMulti(it) }
+        router.post("/reader3/removeBookGroupMulti").coroutineHandler { bookController.removeBookGroupMulti(it) }
 
         // 导入本地文件
         router.post("/reader3/importBookPreview").coroutineHandler { bookController.importBookPreview(it) }
@@ -230,6 +239,20 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/importFromLocalStorePreview").coroutineHandler { bookController.importFromLocalStorePreview(it) }
         // 上传文件到书仓
         router.post("/reader3/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
+
+        // 调试书源
+        router.get("/reader3/bookSourceDebugSSE").coroutineHandlerWithoutRes { bookController.bookSourceDebugSSE(it) }
+
+        // 缓存书籍章节
+        router.get("/reader3/cacheBookSSE").coroutineHandlerWithoutRes { bookController.cacheBookSSE(it) }
+        // 获取书籍缓存信息
+        router.get("/reader3/getShelfBookWithCacheInfo").coroutineHandler { bookController.getShelfBookWithCacheInfo(it) }
+        // 删除书籍章节缓存
+        router.post("/reader3/deleteBookCache").coroutineHandler { bookController.deleteBookCache(it) }
+
+        // 导出书籍
+        router.post("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
+        router.get("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
 
         /** 用户模块 */
         // 上传文件

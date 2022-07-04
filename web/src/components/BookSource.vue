@@ -117,11 +117,9 @@ export default {
       return searchBook.bookUrl == this.$store.state.readingBook.bookUrl;
     },
     getBookSource(refresh) {
-      Axios.get(this.api + `/getBookSource`, {
-        params: {
-          url: this.$store.state.readingBook.bookUrl,
-          refresh: refresh ? 1 : 0
-        }
+      Axios.post(this.api + `/getAvailableBookSource`, {
+        url: this.$store.state.readingBook.bookUrl,
+        refresh: refresh ? 1 : 0
       }).then(
         res => {
           this.loading = false;
@@ -155,7 +153,7 @@ export default {
       if (!isInShelf) {
         return;
       }
-      Axios.post(this.api + `/saveBookSource`, {
+      Axios.post(this.api + `/setBookSource`, {
         bookUrl: this.$store.state.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
         bookSourceUrl: searchBook.origin
@@ -203,12 +201,10 @@ export default {
     loadMoreSource() {
       if (this.loadingMore) return;
       this.loadingMore = true;
-      Axios.get(this.api + `/searchBookSource`, {
-        params: {
-          url: this.$store.state.readingBook.bookUrl,
-          bookSourceGroup: this.bookSourceGroup,
-          lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
-        }
+      Axios.post(this.api + `/searchBookSource`, {
+        url: this.$store.state.readingBook.bookUrl,
+        bookSourceGroup: this.bookSourceGroup,
+        lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
       }).then(
         res => {
           this.loadingMore = false;

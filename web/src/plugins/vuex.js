@@ -64,7 +64,8 @@ export default new Vuex.Store({
     searchConfig: { ...settings.searchConfig },
     txtTocRules: [],
     customConfigList: [].concat(settings.customConfigList),
-    showBookInfo: {}
+    showBookInfo: {},
+    cachingBookList: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -197,6 +198,7 @@ export default new Vuex.Store({
           });
           state.customConfigList[index] = oldCustomConfig;
           state.customConfigList = [].concat(state.customConfigList);
+          setCache("customConfigList", JSON.stringify(state.customConfigList));
         }
       }
       setCache("config", JSON.stringify(config));
@@ -420,6 +422,9 @@ export default new Vuex.Store({
     },
     setShowBookInfo(state, book) {
       state.showBookInfo = book;
+    },
+    setCachingBookList(state, cachingBookList) {
+      state.cachingBookList = [].concat(cachingBookList);
     }
   },
   getters: {
@@ -587,6 +592,11 @@ export default new Vuex.Store({
     },
     currentUserName: state => {
       return getCurrentUserName(state);
+    },
+    currentChapter: state => {
+      return state.readingBook && state.readingBook.catalog
+        ? state.readingBook.catalog[state.readingBook.index]
+        : {};
     }
   },
   actions: {
