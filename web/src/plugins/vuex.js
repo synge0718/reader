@@ -1,6 +1,6 @@
 import Vue from "vue";
 import Vuex from "vuex";
-import settings from "./config";
+import settings, { customFonts, syncConfigFiled } from "./config";
 import { setCache, getCache } from "../plugins/cache";
 import { Message } from "element-ui";
 
@@ -71,11 +71,13 @@ export default new Vuex.Store({
   mutations: {
     setShelfBooks(state, books) {
       // 过滤一下不用的字段，省点内存
+      window.shelfBooks = books;
       state.shelfBooks = books.map(v => {
         return {
           author: v.author,
           bookUrl: v.bookUrl,
           coverUrl: v.coverUrl,
+          tocUrl: v.tocUrl,
           charset: v.charset,
           customCoverUrl: v.customCoverUrl,
           canUpdate: v.canUpdate,
@@ -105,6 +107,7 @@ export default new Vuex.Store({
             author: book.author || state.shelfBooks[index].author,
             bookUrl: book.bookUrl || state.shelfBooks[index].bookUrl,
             coverUrl: book.coverUrl || state.shelfBooks[index].coverUrl,
+            tocUrl: book.tocUrl || state.shelfBooks[index].tocUrl,
             charset: book.charset || state.shelfBooks[index].charset,
             customCoverUrl:
               book.customCoverUrl || state.shelfBooks[index].customCoverUrl,
@@ -188,7 +191,7 @@ export default new Vuex.Store({
         );
         if (index >= 0) {
           const oldCustomConfig = { ...state.customConfigList[index] };
-          Object.keys(settings.customConfigList[0]).forEach(field => {
+          syncConfigFiled.forEach(field => {
             if (
               typeof config[field] !== "undefined" &&
               field !== "name" &&
@@ -480,6 +483,25 @@ export default new Vuex.Store({
     currentFontFamily: state => {
       return settings.fonts[state.config.font];
     },
+    currentCustomFontFamily: (state, getters) => {
+      const customFontName = customFonts[state.config.font];
+      if (
+        state.config.customFontsMap &&
+        state.config.customFontsMap[customFontName]
+      ) {
+        let url = state.config.customFontsMap[customFontName];
+        return {
+          name: customFontName,
+          url:
+            url.startsWith("http://") ||
+            url.startsWith("https://") ||
+            url.startsWith("//")
+              ? url
+              : getters.apiRoot + url
+        };
+      }
+      return null;
+    },
     currentThemeConfig: (state, getters) => {
       if (state.config.theme === "custom") {
         return {
@@ -601,6 +623,14 @@ export default new Vuex.Store({
       return state.readingBook && state.readingBook.catalog
         ? state.readingBook.catalog[state.readingBook.index]
         : {};
+    },
+    readingBook: state => {
+      return {
+        ...state.readingBook,
+        ...(state.shelfBooks.find(
+          v => v.bookUrl === state.readingBook.bookUrl
+        ) || {})
+      };
     }
   },
   actions: {

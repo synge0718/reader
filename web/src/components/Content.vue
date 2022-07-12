@@ -1,4 +1,5 @@
 <script>
+import { loadFont } from "../plugins/helper";
 export default {
   name: "Content",
   data() {
@@ -97,15 +98,16 @@ export default {
       this.initIframe();
     }
     window.contentCom = this;
+    this.loadCustomFontFamil();
   },
   computed: {
     readingBook() {
-      return this.$store.state.readingBook;
+      return this.$store.getters.readingBook;
     },
     chapter() {
       return (
-        this.$store.state.readingBook.catalog[
-          this.$store.state.readingBook.index
+        this.$store.getters.readingBook.catalog[
+          this.$store.getters.readingBook.index
         ] || {}
       );
     },
@@ -167,6 +169,9 @@ export default {
     },
     windowSize() {
       return this.$store.state.windowSize;
+    },
+    currentCustomFontFamily() {
+      return this.$store.getters.currentCustomFontFamily;
     }
   },
   watch: {
@@ -184,6 +189,9 @@ export default {
       if (this.isEpub) {
         //
       }
+    },
+    currentCustomFontFamily() {
+      this.loadCustomFontFamil();
     }
   },
   methods: {
@@ -343,7 +351,7 @@ export default {
             <div class="book-intro">
               <div class="title">{this.title}</div>
               <div class="subtitle">
-                {this.readingBook.bookName}
+                {this.readingBook.name}
                 {this.readingBook.author ? "•" : ""}
                 {this.readingBook.author}
               </div>
@@ -611,6 +619,14 @@ export default {
     },
     onWaiting() {
       // console.log("onWaiting", arguments);
+    },
+    loadCustomFontFamil() {
+      if (this.currentCustomFontFamily) {
+        loadFont(
+          this.currentCustomFontFamily.name,
+          this.currentCustomFontFamily.url
+        );
+      }
     }
   }
 };
