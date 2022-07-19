@@ -45,6 +45,7 @@ import org.springframework.stereotype.Component
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
 import io.vertx.core.http.HttpMethod
+import io.vertx.core.buffer.Buffer
 import com.htmake.reader.api.ReturnData
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.FileUtils
@@ -54,6 +55,8 @@ import java.net.URL;
 import java.nio.charset.Charset
 import java.util.UUID;
 import io.vertx.ext.web.client.WebClient
+import io.vertx.ext.web.client.HttpResponse
+import io.vertx.kotlin.coroutines.awaitResult
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
 import java.io.File
@@ -120,6 +123,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
     private fun addInvalidBookSource(sourceUrl: String, invalidInfo: Map<String, Any>, userNameSpace: String) {
         // 保存600秒时间
         getInvalidBookSourceCache(userNameSpace).put(sourceUrl, jsonEncode(invalidInfo), 600)
+    }
+
+    private fun getBookChaptersCache(userNameSpace: String): ACache {
+        val cacheDir = File(getWorkDir("storage", "cache", "bookChaptersCache", userNameSpace))
+        // 缓存 5M 的书籍章节信息
+        var bookChaptersCache = ACache.get(cacheDir, 1000 * 1000 * 5L, 1000000)
+        return bookChaptersCache
     }
 
     suspend fun getInvalidBookSources(context: RoutingContext): ReturnData {
@@ -203,16 +213,28 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
 
         launch(Dispatchers.IO) {
-            webClient.getAbs(coverUrl).timeout(3000).send {
-                var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
-                if (bodyBytes != null) {
-                    var res = context.response().putHeader("Cache-Control", "86400")
-                    cacheFile.writeBytes(bodyBytes)
-                    res.sendFile(cacheFile.toString())
-                } else {
-                    context.response().setStatusCode(404).end()
-                }
+            val result = awaitResult<HttpResponse<Buffer>> { handler ->
+                webClient.getAbs(coverUrl).timeout(3000).send(handler)
             }
+            var bodyBytes = result?.bodyAsBuffer()?.getBytes()
+            if (bodyBytes != null) {
+                var res = context.response().putHeader("Cache-Control", "86400")
+                cacheFile.writeBytes(bodyBytes)
+                res.sendFile(cacheFile.toString())
+            } else {
+                context.response().setStatusCode(404).end()
+            }
+
+            // webClient.getAbs(coverUrl).timeout(3000).send {
+            //     var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
+            //     if (bodyBytes != null) {
+            //         var res = context.response().putHeader("Cache-Control", "86400")
+            //         cacheFile.writeBytes(bodyBytes)
+            //         res.sendFile(cacheFile.toString())
+            //     } else {
+            //         context.response().setStatusCode(404).end()
+            //     }
+            // }
         }
     }
 
@@ -585,9 +607,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
             content = bookContent
         } else {
-            // 查找章节缓存
+            // 书架书籍查找章节缓存
             var chapterCacheFile: File? = null
-            if (appConfig.cacheChapterContent) {
+            if (bookInfo.isInShelf && appConfig.cacheChapterContent) {
                 val localCacheDir = getChapterCacheDir(bookInfo, userNameSpace)
                 chapterCacheFile = File(localCacheDir.absolutePath + File.separator + chapterIndex + ".txt")
                 if (refresh <= 0 && chapterCacheFile.exists()) {
@@ -1346,6 +1368,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
+        book.isInShelf = true
 
         if (existIndex >= 0) {
             var bookList = bookshelf.getList()
@@ -1438,6 +1461,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             existBook.originName = newBookInfo.originName
             existBook.bookUrl = newBookInfo.bookUrl
             existBook.tocUrl = newBookInfo.tocUrl
+            existBook.isInShelf = true
             if (existBook.coverUrl.isNullOrEmpty() && !newBookInfo.coverUrl.isNullOrEmpty()) {
                 existBook.coverUrl = newBookInfo.coverUrl
             }
@@ -1795,6 +1819,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace, userBookSourceStringList)
                     if (bookSource != null) {
                         withContext(Dispatchers.IO) {
+                            book.isInShelf = true
                             var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace, false, mutex)
                             if (bookChapterList.size > 0) {
                                 var bookChapter = bookChapterList.last()
@@ -1819,7 +1844,16 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     suspend fun getLocalChapterList(book: Book, bookSource: String, refresh: Boolean = false, userNameSpace: String, debugLog: Boolean = true, mutex: Mutex? = null): List<BookChapter> {
         val md5Encode = MD5Utils.md5Encode(book.bookUrl).toString()
-        var chapterList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, md5Encode))
+        var chapterList: JsonArray?
+
+        val bookChaptersCache = getBookChaptersCache(userNameSpace)
+        if (book.isInShelf) {
+            // 书架书籍，从书籍数据目录读取
+            chapterList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, md5Encode))
+        } else {
+            // 临时书籍，从缓存数据读取
+            chapterList = asJsonArray(bookChaptersCache.getAsString(book.name + "_" + book.author + md5Encode))
+        }
 
         if (chapterList == null || refresh) {
             var newChapterList: List<BookChapter>
@@ -1850,7 +1884,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     throw e
                 }
             }
-            saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, md5Encode), newChapterList)
+            if (book.isInShelf) {
+                saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, md5Encode), newChapterList)
+            } else {
+                // 临时书籍缓存1小时
+                bookChaptersCache.put(book.name + "_" + book.author + md5Encode, jsonEncode(newChapterList), 3600)
+            }
             saveShelfBookLatestChapter(book, newChapterList, userNameSpace, mutex)
             return newChapterList
         }
@@ -1943,6 +1982,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (_book.bookUrl.equals(url)) {
                 _book.setRootDir(getWorkDir())
                 _book.setUserNameSpace(userNameSpace)
+                _book.isInShelf = true
                 return _book
             }
         }
